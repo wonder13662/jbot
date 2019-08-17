@@ -1,25 +1,5 @@
 package me.ramswaroop.jbot.core.slack;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import me.ramswaroop.jbot.core.common.BaseBot;
-import me.ramswaroop.jbot.core.common.BotWebSocketHandler;
-import me.ramswaroop.jbot.core.common.Controller;
-import me.ramswaroop.jbot.core.common.EventType;
-import me.ramswaroop.jbot.core.slack.models.Event;
-import me.ramswaroop.jbot.core.slack.models.Message;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.util.StringUtils;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketHandler;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.client.WebSocketConnectionManager;
-import org.springframework.web.socket.client.standard.StandardWebSocketClient;
-
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -30,6 +10,37 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.client.WebSocketConnectionManager;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import me.ramswaroop.jbot.core.common.BaseBot;
+import me.ramswaroop.jbot.core.common.BotWebSocketHandler;
+import me.ramswaroop.jbot.core.common.Controller;
+import me.ramswaroop.jbot.core.common.EventType;
+import me.ramswaroop.jbot.core.facebook.models.Callback;
+import me.ramswaroop.jbot.core.slack.models.Event;
+import me.ramswaroop.jbot.core.slack.models.Message;
 
 /**
  * Base class for making Slack Bots. Any class extending
@@ -382,4 +393,36 @@ public abstract class Bot extends BaseBot {
             return pingTask != null && webSocketSession.isOpen();
         }
     }
+    
+    @GetMapping("/slack-webhook")
+    public final ResponseEntity setupSlackWebhookVerification(@RequestParam("hub.mode") String mode,
+                                                         @RequestParam("hub.verify_token") String verifyToken,
+                                                         @RequestParam("hub.challenge") String challenge) {
+    	
+        if (EventType.SUBSCRIBE.name().equalsIgnoreCase(mode) && getSlackToken().equals(verifyToken)) {
+            return ResponseEntity.ok(challenge);
+        } else {
+            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+        }
+    }
+    
+    /**
+     * Add webhook endpoint
+     *
+     * @param callback
+     * @return 200 OK response
+     */
+    @ResponseBody
+    @PostMapping("/action-endpoint")
+    public final ResponseEntity setupSlackWebhookEndpoint(@RequestBody Callback callback) {
+        try {
+            // Checks this is an event from a page subscription
+            logger.debug("Callback from slack: {}", callback);
+
+        } catch (Exception e) {
+            logger.error("Error in slack webhook: Callback: {} \nException: ", callback.toString(), e);
+        }
+        // fb advises to send a 200 response within 20 secs
+        return ResponseEntity.ok("EVENT_RECEIVED");
+    }    
 }
